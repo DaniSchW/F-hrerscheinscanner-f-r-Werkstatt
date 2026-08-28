@@ -31,7 +31,16 @@ function LoginFormular() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <form onSubmit={absenden} className="card w-full max-w-sm space-y-5">
-        <h1 className="text-tresen-xl font-bold text-brand-700">Anmelden</h1>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.png"
+          alt="Firmenlogo"
+          className="mx-auto h-20 w-auto"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+        <h1 className="text-tresen-xl font-bold text-brand-700 text-center">Anmelden</h1>
         <div>
           <label className="field-label" htmlFor="email">
             E-Mail
