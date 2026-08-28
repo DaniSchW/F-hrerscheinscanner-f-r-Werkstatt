@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 const AKTIVITAETS_EREIGNISSE = ["mousedown", "touchstart", "keydown", "wheel"] as const;
 
@@ -42,8 +43,7 @@ export function InactivityGuard({
   }, [gesperrt, timerZuruecksetzen]);
 
   async function fortsetzen() {
-    const res = await fetch("/api/auth/session");
-    const data = await res.json();
+    const data = await apiFetch<{ mitarbeiter: unknown }>("/auth/session.php").catch(() => ({ mitarbeiter: null }));
     if (!data.mitarbeiter) {
       router.replace("/login");
       return;

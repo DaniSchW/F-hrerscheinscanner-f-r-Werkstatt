@@ -5,13 +5,26 @@ import { useRouter } from "next/navigation";
 import { KameraAufnahme } from "@/components/KameraAufnahme";
 import { UnterschriftPad } from "@/components/UnterschriftPad";
 import { fuehrerscheinPasstZuFahrzeug } from "@/lib/fuehrerscheinklassen";
+import { apiFetch } from "@/lib/api";
 import { KlassenEditor } from "./KlassenEditor";
 import { zurWarteschlangeHinzufuegen } from "@/lib/offlineQueue";
 import { leeresKundeFormular, type Fahrzeug, type KundeFormular } from "./types";
 
 type Schritt = "kunde" | "foto" | "sichtpruefung" | "fahrzeug" | "zustand" | "unterschrift";
 
-type Suchtreffer = { id: string; vorname: string; nachname: string; fuehrerscheinNummer: string };
+type Suchtreffer = { id: string; vorname: string; nachname: string; fuehrerschein_nummer: string };
+
+type KundeApiAntwort = {
+  vorname: string;
+  nachname: string;
+  geburtsdatum: string;
+  geburtsort: string;
+  adresse: string;
+  fuehrerschein_nummer: string;
+  ausstellende_behoerde: string;
+  ausstellungsdatum: string;
+  fuehrerschein_klassen: KundeFormular["fuehrerscheinKlassen"];
+};
 
 export default function NeueVermietungPage() {
   const router = useRouter();
@@ -48,7 +61,7 @@ export default function NeueVermietungPage() {
     !ausgewaehltesFahrzeug ||
     fuehrerscheinPasstZuFahrzeug(
       formular.fuehrerscheinKlassen.map((k) => k.klasse),
-      ausgewaehltesFahrzeug.benoetigteFuehrerscheinklasse
+      ausgewaehltesFahrzeug.benoetigte_fuehrerscheinklasse
     );
 
   async function suchen(wert: string) {
@@ -57,32 +70,30 @@ export default function NeueVermietungPage() {
       setTreffer([]);
       return;
     }
-    const res = await fetch(`/api/kunden?q=${encodeURIComponent(wert)}`);
-    const data = await res.json();
+    const data = await apiFetch<{ kunden: Suchtreffer[] }>(`/kunden/suche.php?q=${encodeURIComponent(wert)}`);
     setTreffer(data.kunden ?? []);
   }
 
   async function kundeAuswaehlen(id: string) {
-    const res = await fetch(`/api/kunden/${id}`);
-    const data = await res.json();
-    if (!res.ok) {
-      setFehler(data.fehler ?? "Kunde konnte nicht geladen werden.");
-      return;
+    try {
+      const data = await apiFetch<{ kunde: KundeApiAntwort }>(`/kunden/get.php?id=${encodeURIComponent(id)}`);
+      const k = data.kunde;
+      setKundeId(id);
+      setFormular({
+        vorname: k.vorname,
+        nachname: k.nachname,
+        geburtsdatum: k.geburtsdatum.slice(0, 10),
+        geburtsort: k.geburtsort,
+        adresse: k.adresse,
+        fuehrerscheinNummer: k.fuehrerschein_nummer,
+        ausstellendeBehoerde: k.ausstellende_behoerde,
+        ausstellungsdatum: k.ausstellungsdatum.slice(0, 10),
+        fuehrerscheinKlassen: k.fuehrerschein_klassen ?? []
+      });
+      setSchritt("foto");
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Kunde konnte nicht geladen werden.");
     }
-    const k = data.kunde;
-    setKundeId(id);
-    setFormular({
-      vorname: k.vorname,
-      nachname: k.nachname,
-      geburtsdatum: k.geburtsdatum.slice(0, 10),
-      geburtsort: k.geburtsort,
-      adresse: k.adresse,
-      fuehrerscheinNummer: k.fuehrerscheinNummer,
-      ausstellendeBehoerde: k.ausstellendeBehoerde,
-      ausstellungsdatum: k.ausstellungsdatum.slice(0, 10),
-      fuehrerscheinKlassen: k.fuehrerscheinKlassen ?? []
-    });
-    setSchritt("foto");
   }
 
   function neuerKunde() {
@@ -115,20 +126,21 @@ export default function NeueVermietungPage() {
 
     setOcrLaeuft(true);
     try {
-      const res = await fetch("/api/ocr/fuehrerschein", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vorderseiteDataUrl: vorderseite,
-          rueckseiteDataUrl: rueckseite ?? undefined
-        })
+      const data = await apiFetch<{
+        daten: {
+          vorname: string | null;
+          nachname: string | null;
+          geburtsdatum: string | null;
+          geburtsort: string | null;
+          adresse: string | null;
+          fuehrerscheinNummer: string | null;
+          ausstellendeBehoerde: string | null;
+          ausstellungsdatum: string | null;
+          klassen: KundeFormular["fuehrerscheinKlassen"];
+        };
+      }>("/ocr/fuehrerschein.php", {
+        body: { vorderseiteDataUrl: vorderseite, rueckseiteDataUrl: rueckseite ?? undefined }
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setFehler(data.fehler ?? "Datenextraktion fehlgeschlagen. Felder bitte manuell prüfen/ausfüllen.");
-        setSchritt("sichtpruefung");
-        return;
-      }
       const d = data.daten;
       setFormular((prev) => ({
         vorname: d.vorname ?? prev.vorname,
@@ -145,14 +157,14 @@ export default function NeueVermietungPage() {
       setVorderseite(null);
       setRueckseite(null);
       setSchritt("sichtpruefung");
-    } catch {
+    } catch (err) {
       await zurWarteschlangeHinzufuegen({
         vorderseiteDataUrl: vorderseite,
         rueckseiteDataUrl: rueckseite
       });
       setFehler(
-        "Verbindung zur Datenextraktion fehlgeschlagen. Das Foto wurde in die Warteschlange gelegt. " +
-          "Bitte Felder in der Zwischenzeit manuell prüfen."
+        (err instanceof Error ? err.message + " " : "") +
+          "Das Foto wurde in die Warteschlange gelegt. Bitte Felder in der Zwischenzeit manuell prüfen."
       );
       setVorderseite(null);
       setRueckseite(null);
@@ -178,22 +190,20 @@ export default function NeueVermietungPage() {
       setFehler("Bitte alle Felder ausfüllen oder korrigieren.");
       return;
     }
-    if (kundeId) {
-      const res = await fetch(`/api/kunden/${kundeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formular)
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setFehler(data.fehler ?? "Kunde konnte nicht aktualisiert werden.");
-        return;
-      }
+    if (formular.fuehrerscheinKlassen.length === 0 || formular.fuehrerscheinKlassen.some((k) => !k.klasse.trim())) {
+      setFehler("Bitte mindestens eine Führerscheinklasse eintragen.");
+      return;
     }
-    const res = await fetch("/api/fahrzeuge?verfuegbar=true");
-    const data = await res.json();
-    setFahrzeuge(data.fahrzeuge ?? []);
-    setSchritt("fahrzeug");
+    try {
+      if (kundeId) {
+        await apiFetch("/kunden/aktualisieren.php", { body: { id: kundeId, ...formular } });
+      }
+      const data = await apiFetch<{ fahrzeuge: Fahrzeug[] }>("/fahrzeuge/liste.php?verfuegbar=true");
+      setFahrzeuge(data.fahrzeuge ?? []);
+      setSchritt("fahrzeug");
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Vorgang konnte nicht fortgesetzt werden.");
+    }
   }
 
   function fahrzeugWeiter() {
@@ -226,10 +236,8 @@ export default function NeueVermietungPage() {
     setFehler(null);
     setAbsendenLaeuft(true);
     try {
-      const res = await fetch("/api/vermietungen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiFetch("/vermietungen/anlegen.php", {
+        body: {
           kunde: kundeId ? { modus: "bestehend", kundeId } : { modus: "neu", ...formular },
           fahrzeugId,
           kmStandAusgabe: Number.parseInt(kmStand, 10),
@@ -237,17 +245,11 @@ export default function NeueVermietungPage() {
           zustandsfotosAusgabe: zustandsfotos,
           unterschriftKundeDataUrl: unterschrift,
           fuehrerscheinKlassePassend: klassePasst
-        })
+        }
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setFehler(data.fehler ?? "Vermietung konnte nicht angelegt werden.");
-        return;
-      }
       router.replace("/");
-      router.refresh();
-    } catch {
-      setFehler("Verbindung fehlgeschlagen. Bitte erneut versuchen.");
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Vermietung konnte nicht angelegt werden.");
     } finally {
       setAbsendenLaeuft(false);
     }
@@ -273,7 +275,7 @@ export default function NeueVermietungPage() {
                   <p className="font-semibold">
                     {k.vorname} {k.nachname}
                   </p>
-                  <p className="text-base text-slate-500">FS-Nr. {k.fuehrerscheinNummer}</p>
+                  <p className="text-base text-slate-500">FS-Nr. {k.fuehrerschein_nummer}</p>
                 </button>
               </li>
             ))}
@@ -391,7 +393,7 @@ export default function NeueVermietungPage() {
               >
                 <p className="font-semibold">{f.kennzeichen}</p>
                 <p className="text-base text-slate-500">
-                  {f.bezeichnung} · Klasse {f.benoetigteFuehrerscheinklasse}
+                  {f.bezeichnung} · Klasse {f.benoetigte_fuehrerscheinklasse}
                 </p>
               </button>
             ))}
@@ -401,7 +403,7 @@ export default function NeueVermietungPage() {
             <div className="card space-y-2 border-warn-500 bg-warn-500/10">
               <p className="font-semibold text-warn-600">
                 Achtung: Die erfassten Führerscheinklassen passen nicht eindeutig zu diesem Fahrzeug
-                (benötigt: {ausgewaehltesFahrzeug.benoetigteFuehrerscheinklasse}).
+                (benötigt: {ausgewaehltesFahrzeug.benoetigte_fuehrerscheinklasse}).
               </p>
               <label className="flex items-center gap-2 text-base">
                 <input

@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { parseMysqlDatetime } from "@/lib/datum";
 
 type Treffer = {
   id: string;
-  ausgabeDatum: string;
-  kunde: { vorname: string; nachname: string };
-  fahrzeug: { kennzeichen: string; bezeichnung: string };
+  ausgabe_datum: string;
+  kunde_vorname: string;
+  kunde_nachname: string;
+  fahrzeug_kennzeichen: string;
+  fahrzeug_bezeichnung: string;
 };
 
 export default function RueckgabeSuchePage() {
@@ -24,8 +28,9 @@ export default function RueckgabeSuchePage() {
     }
     setLadend(true);
     try {
-      const res = await fetch(`/api/vermietungen?laufend=true&q=${encodeURIComponent(wert)}`);
-      const data = await res.json();
+      const data = await apiFetch<{ vermietungen: Treffer[] }>(
+        `/vermietungen/suche.php?laufend=true&q=${encodeURIComponent(wert)}`
+      );
       setTreffer(data.vermietungen ?? []);
     } finally {
       setLadend(false);
@@ -47,14 +52,14 @@ export default function RueckgabeSuchePage() {
           <li key={v.id}>
             <button
               className="card block w-full text-left hover:border-brand-500"
-              onClick={() => router.push(`/vermietung/${v.id}/ruecknahme`)}
+              onClick={() => router.push(`/vermietung/ruecknahme?id=${v.id}`)}
             >
               <p className="font-semibold">
-                {v.fahrzeug.kennzeichen} · {v.fahrzeug.bezeichnung}
+                {v.fahrzeug_kennzeichen} · {v.fahrzeug_bezeichnung}
               </p>
               <p className="text-base text-slate-500">
-                {v.kunde.vorname} {v.kunde.nachname} · seit{" "}
-                {new Date(v.ausgabeDatum).toLocaleDateString("de-DE")}
+                {v.kunde_vorname} {v.kunde_nachname} · seit{" "}
+                {parseMysqlDatetime(v.ausgabe_datum).toLocaleDateString("de-DE")}
               </p>
             </button>
           </li>

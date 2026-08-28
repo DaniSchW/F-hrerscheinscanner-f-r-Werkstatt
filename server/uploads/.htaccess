@@ -1,0 +1,10 @@
+# Zustandsfotos und die verschlüsselte Unterschrift liegen hier - sie dürfen
+# NIE direkt per URL erreichbar sein (personenbezogene Daten). Nur
+# server/api/dateien.php darf sie ausliefern, nach Prüfung der Session.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

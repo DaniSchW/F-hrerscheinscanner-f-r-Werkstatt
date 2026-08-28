@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return; // API-Schreibzugriffe nie über den SW cachen/abfangen
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api/")) return; // niemals personenbezogene API-Antworten cachen
+  if (url.pathname.startsWith("/server/")) return; // niemals personenbezogene API-Antworten cachen
 
   if (request.mode === "navigate") {
     event.respondWith(

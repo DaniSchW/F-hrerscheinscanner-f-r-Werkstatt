@@ -2,6 +2,7 @@
 
 import { useState, FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { apiFetch, setToken } from "@/lib/api";
 
 function LoginFormular() {
   const router = useRouter();
@@ -16,21 +17,12 @@ function LoginFormular() {
     setFehler(null);
     setLadend(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, passwort })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFehler(data.fehler ?? "Anmeldung fehlgeschlagen.");
-        return;
-      }
+      const data = await apiFetch<{ token: string }>("/auth/login.php", { body: { email, passwort } });
+      setToken(data.token);
       const ziel = params.get("weiter") ?? "/";
       router.replace(ziel);
-      router.refresh();
-    } catch {
-      setFehler("Verbindung fehlgeschlagen. Bitte erneut versuchen.");
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen.");
     } finally {
       setLadend(false);
     }

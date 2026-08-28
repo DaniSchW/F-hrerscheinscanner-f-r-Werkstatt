@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type MitarbeiterEintrag = {
   id: string;
   name: string;
   email: string;
   rolle: "mitarbeiter" | "admin";
-  aktiv: boolean;
+  aktiv: number;
 };
 
 export default function MitarbeiterverwaltungPage() {
@@ -19,8 +20,7 @@ export default function MitarbeiterverwaltungPage() {
   const [fehler, setFehler] = useState<string | null>(null);
 
   async function laden() {
-    const res = await fetch("/api/admin/mitarbeiter");
-    const data = await res.json();
+    const data = await apiFetch<{ mitarbeiter: MitarbeiterEintrag[] }>("/admin/mitarbeiter-liste.php");
     setListe(data.mitarbeiter ?? []);
   }
 
@@ -33,29 +33,20 @@ export default function MitarbeiterverwaltungPage() {
   async function anlegen(e: React.FormEvent) {
     e.preventDefault();
     setFehler(null);
-    const res = await fetch("/api/admin/mitarbeiter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, passwort, rolle })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setFehler(data.fehler ?? "Anlegen fehlgeschlagen.");
-      return;
+    try {
+      await apiFetch("/admin/mitarbeiter-anlegen.php", { body: { name, email, passwort, rolle } });
+      setName("");
+      setEmail("");
+      setPasswort("");
+      setRolle("mitarbeiter");
+      laden();
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Anlegen fehlgeschlagen.");
     }
-    setName("");
-    setEmail("");
-    setPasswort("");
-    setRolle("mitarbeiter");
-    laden();
   }
 
   async function statusAendern(id: string, aktiv: boolean) {
-    await fetch(`/api/admin/mitarbeiter/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aktiv })
-    });
+    await apiFetch("/admin/mitarbeiter-aktualisieren.php", { body: { id, aktiv } });
     laden();
   }
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type FahrzeugEintrag = {
   id: string;
   kennzeichen: string;
   bezeichnung: string;
-  benoetigteFuehrerscheinklasse: string;
+  benoetigte_fuehrerscheinklasse: string;
   status: string;
 };
 
@@ -18,8 +19,7 @@ export default function FahrzeugverwaltungPage() {
   const [fehler, setFehler] = useState<string | null>(null);
 
   async function laden() {
-    const res = await fetch("/api/fahrzeuge");
-    const data = await res.json();
+    const data = await apiFetch<{ fahrzeuge: FahrzeugEintrag[] }>("/fahrzeuge/liste.php");
     setListe(data.fahrzeuge ?? []);
   }
 
@@ -32,20 +32,17 @@ export default function FahrzeugverwaltungPage() {
   async function anlegen(e: React.FormEvent) {
     e.preventDefault();
     setFehler(null);
-    const res = await fetch("/api/fahrzeuge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kennzeichen, bezeichnung, benoetigteFuehrerscheinklasse: klasse })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setFehler(data.fehler ?? "Anlegen fehlgeschlagen.");
-      return;
+    try {
+      await apiFetch("/fahrzeuge/anlegen.php", {
+        body: { kennzeichen, bezeichnung, benoetigteFuehrerscheinklasse: klasse }
+      });
+      setKennzeichen("");
+      setBezeichnung("");
+      setKlasse("B");
+      laden();
+    } catch (err) {
+      setFehler(err instanceof Error ? err.message : "Anlegen fehlgeschlagen.");
     }
-    setKennzeichen("");
-    setBezeichnung("");
-    setKlasse("B");
-    laden();
   }
 
   return (
@@ -86,7 +83,7 @@ export default function FahrzeugverwaltungPage() {
           <li key={f.id} className="card">
             <p className="font-semibold">{f.kennzeichen}</p>
             <p className="text-base text-slate-500">
-              {f.bezeichnung} · Klasse {f.benoetigteFuehrerscheinklasse} · {f.status}
+              {f.bezeichnung} · Klasse {f.benoetigte_fuehrerscheinklasse} · {f.status}
             </p>
           </li>
         ))}

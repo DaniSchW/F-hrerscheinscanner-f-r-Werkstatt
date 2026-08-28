@@ -8,123 +8,191 @@ zugänglich.
 Siehe das ursprüngliche Briefing für den fachlichen Hintergrund; dieses README dokumentiert die
 konkrete Umsetzung.
 
-## Tech-Stack
+## Architektur
 
-- **Frontend/Backend**: Next.js 16 (App Router, TypeScript), Tailwind CSS für große, tresen-taugliche
-  Bedienelemente
-- **Datenbank**: PostgreSQL via Prisma ORM (EU-hosten, z.B. Hetzner/IONOS)
-- **Auth**: Eigene, DB-gestützte Cookie-Sessions (kein JWT) - dadurch kann ein Admin einzelne Geräte
-  gezielt abmelden
-- **Datenextraktion**: Anthropic Claude API (Vision, Tool-Use für strukturiertes JSON)
-- **Dateien**: Zustandsfotos + verschlüsselte Unterschrift lokal unter `UPLOAD_DIR` (austauschbar gegen
-  EU-Objektspeicher, siehe `src/lib/storage.ts`)
+Läuft auf klassischem PHP/MySQL-Shared-Hosting (Kasserver/All-Inkl) - kein dauerhafter Node-Prozess
+nötig:
+
+- **Frontend**: Next.js 16 (App Router, TypeScript), als **statischer Export** gebaut
+  (`npm run build` → `out/`), Tailwind CSS für große, tresen-taugliche Bedienelemente. Läuft rein im
+  Browser, spricht das PHP-Backend über `fetch()` an.
+- **Backend**: PHP 8.5, flache Skripte unter `server/api/`, PDO/MySQL, kein Framework (kleine,
+  prüfbare Angriffsfläche). Konventionen orientieren sich am bestehenden Random-Jingle-PHP-Backend
+  desselben Hostings.
+- **Datenbank**: MySQL/MariaDB (`server/schema.sql`).
+- **Auth**: Bearer-Token-Sessions (kein Cookie, da Next-Export und PHP-Backend als reine
+  Request/Response-APIs ohne gemeinsamen Server-Prozess laufen). Der Token liegt im `localStorage`
+  des Browsers und wird bei jedem Request als `Authorization: Bearer <token>` mitgeschickt.
+- **Datenextraktion**: Anthropic Claude API (Vision, Tool-Use für strukturiertes JSON), aufgerufen
+  server-seitig aus PHP (`server/lib/ocr.php`) - der API-Key bleibt serverseitig.
+- **Dateien**: Zustandsfotos + AES-256-GCM-verschlüsselte Unterschrift liegen unter
+  `server/uploads/` (per `.htaccess` nie direkt per URL erreichbar), ausgeliefert nur über
+  `server/api/dateien.php` nach Session-Prüfung.
 - **PWA**: `public/manifest.json` + `public/sw.js` (App-Shell-Cache, Offline-Warteschlange für die
-  Führerschein-OCR via IndexedDB)
+  Führerschein-OCR via IndexedDB).
 
 ## Ordnerstruktur
 
 ```
-prisma/
-  schema.prisma          Datenmodell (Abschnitt 3 des Briefings)
-  migrations/
-  seed.ts                Admin-Account + Beispiel-Fahrzeuge für den Erststart
+server/                       PHP-Backend
+  schema.sql                  MySQL-Schema
+  seed.php                    CLI-Skript: Erst-Admin + Beispiel-Fahrzeuge anlegen
+  config.example.php          Vorlage - nach server/config.php kopieren (gitignored)
+  .htaccess                   Sperrt config.php gegen Direktzugriff
+  lib/                        db, auth, response, crypto, storage, audit, loeschung, ocr,
+                               fuehrerscheinklassen
+  api/
+    auth/                     login.php, logout.php, session.php
+    kunden/                   suche.php, anlegen.php, get.php, aktualisieren.php
+    fahrzeuge/                liste.php, anlegen.php
+    vermietungen/             suche.php, anlegen.php, ruecknahme.php
+    ocr/fuehrerschein.php
+    dateien.php               Zustandsfotos/Unterschrift ausliefern (authentifiziert)
+    admin/                    mitarbeiter-*, sessions-*, audit-log.php, export.php, loeschen.php
+    cron/loeschung.php        Täglicher Löschjob (Bearer-Secret statt Login)
+  uploads/                    Zustandsfotos + verschlüsselte Unterschrift (gitignored, per .htaccess gesperrt)
+
 src/
-  app/
-    login/                Login-Seite (öffentlich)
-    (app)/                 Alle Seiten hinter Login (Layout prüft Session + Inaktivitäts-Sperre)
-      page.tsx             Startmaske
-      vermietung/neu/       Neue-Vermietung-Assistent (Kunde → Foto/OCR → Sichtprüfung →
-                             Fahrzeug → Zustand → Unterschrift → Abschluss)
-      vermietung/rueckgabe/ Rückgabe suchen
-      vermietung/[id]/ruecknahme/ Rückgabe erfassen
-      kunden/               Kundensuche + -verlauf
-      admin/                Nutzerverwaltung, Fahrzeuge, Geräte/Sessions, Audit-Log, Export/Löschung
-    api/                   Alle REST-Routen (siehe unten)
-  components/             Kamera-Aufnahme, Unterschrift-Pad, Inaktivitäts-Sperre, Offline-Hinweis
   lib/
-    auth/                 Sessions, Passwort-Hashing, Route-Guards
-    ocr/claude.ts          Claude-Vision-Aufruf für die Führerschein-Extraktion
-    storage.ts             Datei-Adapter (lokal, austauschbar)
-    crypto.ts               AES-256-GCM für die Unterschrift
-    loeschung.ts            DSGVO-Löschlogik (automatisch + manuell)
-    retention.ts            Berechnung des Löschdatums
-    fuehrerscheinklassen.ts Warnhinweis-Heuristik Führerscheinklasse ↔ Fahrzeug
-  proxy.ts                 Next.js Proxy/Middleware: schneller Cookie-Check, Login-Redirect
+    api.ts                    Fetch-Wrapper fürs PHP-Backend, Token-Verwaltung (localStorage)
+    AuthContext.tsx            Client-seitige Sitzungsprüfung/-verwaltung (ersetzt Server-Middleware)
+    datum.ts                   MySQL-DATETIME-Strings korrekt als UTC parsen
+    fuehrerscheinklassen.ts    Warnhinweis-Heuristik Führerscheinklasse ↔ Fahrzeug
+    offlineQueue.ts            IndexedDB-Warteschlange für OCR-Aufrufe ohne Verbindung
+  components/                 Kamera-Aufnahme, Unterschrift-Pad, Inaktivitäts-Sperre, Offline-Hinweis
+  app/
+    login/                     Login-Seite (öffentlich)
+    (app)/                     Alle Seiten hinter Login (AuthProvider prüft Token clientseitig)
+      page.tsx                 Startmaske
+      vermietung/neu/           Neue-Vermietung-Assistent
+      vermietung/rueckgabe/     Rückgabe suchen
+      vermietung/ruecknahme/    Rückgabe erfassen (?id=… statt dynamischer Route, s.u.)
+      kunden/                   Kundensuche
+      kunden/detail/            Kundendetail + Verlauf (?id=…)
+      admin/                    Nutzerverwaltung, Fahrzeuge, Geräte/Sessions, Audit-Log, Export/Löschung
+
 public/
   manifest.json, sw.js, offline.html, icons/
 ```
 
-## API-Routen
-
-| Route | Methode | Zweck |
-|---|---|---|
-| `/api/auth/login` | POST | Login, setzt Sitzungs-Cookie (7 Tage) |
-| `/api/auth/logout` | POST | Aktuelle Sitzung widerrufen |
-| `/api/auth/session` | GET | Aktuellen Mitarbeiter abfragen (u.a. für die Inaktivitäts-Sperre) |
-| `/api/ocr/fuehrerschein` | POST | Fotos an Claude Vision senden, strukturierte Felder zurück |
-| `/api/kunden` | GET/POST | Kundensuche / neuen Kunden anlegen |
-| `/api/kunden/[id]` | GET/PATCH | Kunde inkl. Verlauf laden / aktualisieren |
-| `/api/fahrzeuge` | GET/POST | Fahrzeugliste (optional `?verfuegbar=true`) / anlegen (Admin) |
-| `/api/vermietungen` | GET/POST | Vermietungen suchen / neue Vermietung anlegen |
-| `/api/vermietungen/[id]/ruecknahme` | POST | Rückgabe erfassen |
-| `/api/dateien/[...pfad]` | GET | Zustandsfotos/Unterschrift ausliefern (nur angemeldet) |
-| `/api/admin/mitarbeiter` | GET/POST | Mitarbeiterverwaltung |
-| `/api/admin/mitarbeiter/[id]` | PATCH | Aktivieren/Deaktivieren/Rolle ändern |
-| `/api/admin/sessions` | GET | Aktive Geräte/Sessions |
-| `/api/admin/sessions/[id]` | DELETE | Gerät abmelden |
-| `/api/admin/audit-log` | GET | Audit-Log (paginiert) |
-| `/api/admin/export` | POST/DELETE | DSGVO-Auskunft / manuelle Löschung auf Anfrage |
-| `/api/cron/loeschung` | POST | Täglicher Löschjob (Bearer-Token `CRON_SECRET`) |
+**Warum `?id=…` statt `/kunden/[id]`:** Ein reiner statischer Export kann keine zur Build-Zeit
+unbekannten dynamischen Routen bedienen (kein Server, der sie zur Laufzeit auflöst). Kundendetail und
+Rückgabe-Erfassung lesen die ID daher über `useSearchParams()` statt über einen Next.js-Routenparameter.
 
 ## Lokale Einrichtung
 
-Voraussetzungen: Node.js 20+, PostgreSQL (lokal via `docker-compose.yml` oder eine bestehende Instanz).
+Voraussetzungen: Node.js 20+, PHP 8.4/8.5 mit `pdo_mysql`, eine MySQL/MariaDB-Instanz.
 
 ```bash
+# Backend
+cp server/config.example.php server/config.php
+# server/config.php mit echten Werten füllen: DB-Zugang, ANTHROPIC_API_KEY, CRON_SECRET,
+# SIGNATURE_ENCRYPTION_KEY (openssl rand -base64 32)
+mysql -u <db_user> -p <db_name> < server/schema.sql
+php server/seed.php admin@example.com "IhrPasswort123"
+php -S localhost:8090          # Backend unter http://localhost:8090/server/api/...
+
+# Frontend
 cp .env.example .env
-# .env ausfüllen: DATABASE_URL, ANTHROPIC_API_KEY, CRON_SECRET, SIGNATURE_ENCRYPTION_KEY
-#   openssl rand -hex 32      -> CRON_SECRET
-#   openssl rand -base64 32   -> SIGNATURE_ENCRYPTION_KEY
-
-docker compose up -d          # startet lokale PostgreSQL
 npm install
-npm run prisma:migrate        # Schema anwenden
-npm run db:seed               # Admin-Account + Beispiel-Fahrzeuge anlegen
-npm run dev                   # http://localhost:3000
+npm run dev                     # http://localhost:3000, spricht per Default localhost:8090? siehe unten
 ```
 
-Weitere Skripte: `npm run build`, `npm run typecheck`, `npm run lint`.
+Für `npm run dev` gegen das lokale PHP unter einem anderen Port zeigt: `NEXT_PUBLIC_API_BASE_URL`
+in `.env` auf `http://localhost:8090/server/api` setzen (CORS ist dabei kein Problem, da PHP hier
+nur GET/POST/JSON ohne Cookies beantwortet - Bearer-Token-Auth ist CORS-unkritisch, `server/lib/response.php`
+antwortet aber ohne CORS-Header; für funktionierende Cross-Origin-Requests im `next dev`-Betrieb ggf.
+`Access-Control-Allow-Origin` in `server/lib/response.php` ergänzen, oder direkt production-artig über
+denselben Ursprung testen, siehe nächster Abschnitt).
 
-### Löschjob einrichten
+### Production-artig lokal testen (empfohlen vor jedem Deploy)
 
-`/api/cron/loeschung` muss täglich von einem externen Cronjob aufgerufen werden, z.B.:
+Simuliert das echte Kasserver-Setup: Next-Export und `server/` auf demselben Ursprung, kein CORS nötig.
 
 ```bash
-curl -X POST https://IHR-HOST/api/cron/loeschung -H "Authorization: Bearer $CRON_SECRET"
+npm run build                   # erzeugt out/
+mkdir -p /tmp/deploy-test && cp -r out/. /tmp/deploy-test/ && cp -r server /tmp/deploy-test/server
+cd /tmp/deploy-test && php -S localhost:8090
+# http://localhost:8090/ öffnen
 ```
+
+Weitere Skripte: `npm run typecheck`, `npm run lint`.
+
+## Deployment auf dem Kasserver
+
+1. `npm run build` lokal ausführen → Inhalt von `out/` per FTP/SFTP in das Hauptverzeichnis (Domain-
+   Wurzel) hochladen.
+2. `server/` (ohne `server/config.php`, ohne `server/uploads/*` außer `.htaccess`) daneben in
+   dasselbe Verzeichnis hochladen, sodass es unter `https://IHR-DOMAIN/server/` erreichbar ist.
+3. `server/config.example.php` auf dem Server nach `server/config.php` kopieren und ausfüllen
+   (DB-Zugang aus KAS, Claude-API-Key, `CRON_SECRET`, `SIGNATURE_ENCRYPTION_KEY`).
+4. `server/schema.sql` einmalig gegen die MySQL-Datenbank ausführen (phpMyAdmin in KAS oder
+   `mysql -u <dbname> -p <dbname> < server/schema.sql`).
+5. Ersten Admin-Account anlegen: `php server/seed.php admin@example.com "IhrPasswort"` per SSH,
+   oder manuell einen `mitarbeiter`-Datensatz mit `password_hash()` anlegen.
+6. In KAS unter "Cronjobs" einen täglichen Job einrichten, der den Löschjob aufruft:
+   ```bash
+   curl -X POST https://IHR-DOMAIN/server/api/cron/loeschung.php \
+     -H "Authorization: Bearer $CRON_SECRET"
+   ```
+7. `server/uploads/` muss für den Webserver-Nutzer beschreibbar sein (Standard bei Kasserver-Hosting
+   i.d.R. gegeben).
+
+Bei jedem Code-Update: Schritt 1–2 wiederholen (nur `out/` und `server/` neu hochladen,
+`server/config.php` und `server/uploads/` bleiben unangetastet).
+
+## API-Routen (server/api/)
+
+| Route | Methode | Zweck |
+|---|---|---|
+| `auth/login.php` | POST | Login, liefert Bearer-Token (7 Tage gültig) |
+| `auth/logout.php` | POST | Aktuelle Sitzung widerrufen |
+| `auth/session.php` | GET | Aktuellen Mitarbeiter abfragen |
+| `ocr/fuehrerschein.php` | POST | Fotos an Claude Vision senden, strukturierte Felder zurück |
+| `kunden/suche.php` | GET | Kundensuche (Name/FS-Nummer) |
+| `kunden/anlegen.php` | POST | Neuen Kunden anlegen |
+| `kunden/get.php` | GET | Kunde inkl. Verlauf laden |
+| `kunden/aktualisieren.php` | POST | Kunde aktualisieren |
+| `fahrzeuge/liste.php` | GET | Fahrzeugliste (optional `?verfuegbar=true`) |
+| `fahrzeuge/anlegen.php` | POST | Fahrzeug anlegen (Admin) |
+| `vermietungen/suche.php` | GET | Vermietungen suchen |
+| `vermietungen/anlegen.php` | POST | Neue Vermietung anlegen |
+| `vermietungen/ruecknahme.php` | POST | Rückgabe erfassen |
+| `dateien.php` | GET | Zustandsfoto/Unterschrift ausliefern (nur angemeldet) |
+| `admin/mitarbeiter-liste.php` | GET | Mitarbeiterliste |
+| `admin/mitarbeiter-anlegen.php` | POST | Mitarbeiter anlegen |
+| `admin/mitarbeiter-aktualisieren.php` | POST | Aktivieren/Deaktivieren/Rolle ändern |
+| `admin/sessions-liste.php` | GET | Aktive Geräte/Sessions |
+| `admin/sessions-abmelden.php` | POST | Gerät abmelden |
+| `admin/audit-log.php` | GET | Audit-Log (paginiert) |
+| `admin/export.php` | POST | DSGVO-Auskunft |
+| `admin/loeschen.php` | POST | Manuelle Löschung auf Anfrage |
+| `cron/loeschung.php` | POST | Täglicher Löschjob (Bearer `CRON_SECRET`) |
 
 ## Sicherheits-/DSGVO-Hinweise für den Produktivbetrieb
 
 - **AVV**: Mit dem Hosting-Anbieter und mit Anthropic (Claude API) muss ein
   Auftragsverarbeitungsvertrag abgeschlossen werden, bevor produktive Führerscheindaten verarbeitet
-  werden (Abschnitt 9 des Briefings).
-- **TLS**: Produktiv ausschließlich über HTTPS betreiben (z.B. Reverse Proxy mit Let's-Encrypt-Zertifikat).
-- **Verschlüsselung at rest**: Die Datenbank sollte auf Infrastrukturebene verschlüsselt werden
-  (z.B. verschlüsseltes Volume). Die digitale Unterschrift ist zusätzlich anwendungsseitig mit
-  AES-256-GCM verschlüsselt.
-- **Datei-Speicher**: `src/lib/storage.ts` schreibt standardmäßig lokal unter `UPLOAD_DIR`. Für den
-  Produktivbetrieb gegen EU-Objektspeicher (z.B. Hetzner Object Storage, S3-kompatibel) austauschen -
-  dafür ist bewusst nur dieses eine Modul zuständig.
-- **Führerschein-Rohfotos** werden serverseitig nie persistiert (`src/lib/ocr/claude.ts`) und
+  werden (Briefing Abschnitt 9).
+- **TLS**: Kasserver stellt HTTPS bereit - sicherstellen, dass die Domain darüber läuft und HTTP auf
+  HTTPS umleitet.
+- **Bearer-Token statt Cookie**: Der Session-Token liegt im `localStorage` (nicht httpOnly, da
+  clientseitig aus einer statischen Seite heraus gesendet). Ein XSS auf derselben Origin könnte ihn
+  auslesen - daher: keine Fremd-Skripte einbinden, CSP über `.htaccess`/Meta-Tag erwägen.
+- **Verschlüsselung at rest**: Die digitale Unterschrift ist AES-256-GCM-verschlüsselt
+  (`server/lib/crypto.php`) mit `SIGNATURE_ENCRYPTION_KEY`. Für die Datenbank selbst hängt
+  Verschlüsselung at rest vom Kasserver-Hosting ab (i.d.R. keine eigene Kontrolle darüber, ähnlich wie
+  bei anderen Shared-Hosting-Angeboten).
+- **Führerschein-Rohfotos** werden serverseitig nie persistiert (`server/lib/ocr.php`) und
   client-seitig nach der Sichtprüfung verworfen.
-- **Aufbewahrungsfrist**: `RETENTION_MONTHS` (Standard 12) ist vom Betrieb festzulegen
-  (Abschnitt 8 des Briefings nennt 6–12 Monate als Richtwert).
-- **Backups**: Automatisiertes tägliches Backup der Datenbank, getrennt vom Produktivsystem
-  gespeichert, ist Teil des Hosting-Setups und nicht Teil dieses Repos (Abschnitt 7 des Briefings).
+- **Aufbewahrungsfrist**: `RETENTION_MONTHS` in `server/config.php` (Standard 12) ist vom Betrieb
+  festzulegen (Briefing Abschnitt 8 nennt 6–12 Monate als Richtwert).
+- **Backups**: Automatisiertes tägliches Backup der Datenbank (KAS bietet Backup-Funktionen),
+  getrennt vom Produktivsystem gespeichert (Briefing Abschnitt 7).
 
 ## Bewusste Vereinfachungen (siehe Abschnitt 10 des Briefings)
 
 Nicht enthalten: Dashboard aktuell verliehener Fahrzeuge, automatische Erinnerung bei überfälliger
 Rückgabe, Buchhaltungs-Export. Die Führerschein-Klassen-Prüfung
-(`src/lib/fuehrerscheinklassen.ts`) ist eine vereinfachte Warnhinweis-Heuristik, keine
+(`server/lib/fuehrerscheinklassen.php`) ist eine vereinfachte Warnhinweis-Heuristik, keine
 rechtsverbindliche Prüfung.

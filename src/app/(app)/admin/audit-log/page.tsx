@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { parseMysqlDatetime } from "@/lib/datum";
 
 type Eintrag = {
   id: string;
   aktion: string;
-  betroffeneEntitaetId: string | null;
+  betroffene_entitaet_id: string | null;
   zeitstempel: string;
-  mitarbeiter: { name: string } | null;
+  mitarbeiter_name: string | null;
 };
 
 export default function AuditLogPage() {
@@ -15,9 +17,9 @@ export default function AuditLogPage() {
   const [seite, setSeite] = useState(1);
 
   useEffect(() => {
-    fetch(`/api/admin/audit-log?seite=${seite}`)
-      .then((res) => res.json())
-      .then((data) => setEintraege(data.eintraege ?? []));
+    apiFetch<{ eintraege: Eintrag[] }>(`/admin/audit-log.php?seite=${seite}`).then((data) =>
+      setEintraege(data.eintraege ?? [])
+    );
   }, [seite]);
 
   return (
@@ -36,10 +38,10 @@ export default function AuditLogPage() {
           <tbody>
             {eintraege.map((e) => (
               <tr key={e.id} className="border-b border-slate-100">
-                <td className="py-2 pr-3">{new Date(e.zeitstempel).toLocaleString("de-DE")}</td>
-                <td className="py-2 pr-3">{e.mitarbeiter?.name ?? "–"}</td>
+                <td className="py-2 pr-3">{parseMysqlDatetime(e.zeitstempel).toLocaleString("de-DE")}</td>
+                <td className="py-2 pr-3">{e.mitarbeiter_name ?? "–"}</td>
                 <td className="py-2 pr-3">{e.aktion}</td>
-                <td className="py-2 pr-3 text-slate-500">{e.betroffeneEntitaetId ?? "–"}</td>
+                <td className="py-2 pr-3 text-slate-500">{e.betroffene_entitaet_id ?? "–"}</td>
               </tr>
             ))}
           </tbody>

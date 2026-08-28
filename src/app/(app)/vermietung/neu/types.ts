@@ -32,6 +32,6 @@ export type Fahrzeug = {
   id: string;
   kennzeichen: string;
   bezeichnung: string;
-  benoetigteFuehrerscheinklasse: string;
+  benoetigte_fuehrerscheinklasse: string;
   status: string;
 };

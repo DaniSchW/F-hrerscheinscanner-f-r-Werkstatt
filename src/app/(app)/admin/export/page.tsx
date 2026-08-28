@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 export default function ExportLoeschungPage() {
   const [suchbegriff, setSuchbegriff] = useState("");
@@ -17,22 +18,22 @@ export default function ExportLoeschungPage() {
       setTreffer([]);
       return;
     }
-    const res = await fetch(`/api/kunden?q=${encodeURIComponent(wert)}`);
-    const data = await res.json();
+    const data = await apiFetch<{ kunden: { id: string; vorname: string; nachname: string }[] }>(
+      `/kunden/suche.php?q=${encodeURIComponent(wert)}`
+    );
     setTreffer(data.kunden ?? []);
   }
 
   async function exportieren(kunde: { id: string; vorname: string; nachname: string }) {
     setAusgewaehlt(kunde);
     setMeldung(null);
-    const res = await fetch("/api/admin/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kundeId: kunde.id })
-    });
-    const data = await res.json();
-    setExportDaten(res.ok ? data.kunde : null);
-    if (!res.ok) setMeldung(data.fehler ?? "Export fehlgeschlagen.");
+    try {
+      const data = await apiFetch<{ kunde: unknown }>("/admin/export.php", { body: { kundeId: kunde.id } });
+      setExportDaten(data.kunde);
+    } catch (err) {
+      setExportDaten(null);
+      setMeldung(err instanceof Error ? err.message : "Export fehlgeschlagen.");
+    }
   }
 
   async function loeschen() {
@@ -40,20 +41,17 @@ export default function ExportLoeschungPage() {
     if (!confirm(`Alle Führerschein-/Kundendaten von ${ausgewaehlt.vorname} ${ausgewaehlt.nachname} jetzt löschen?`)) {
       return;
     }
-    const res = await fetch("/api/admin/export", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kundeId: ausgewaehlt.id })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setMeldung(data.fehler ?? "Löschung fehlgeschlagen.");
-      return;
+    try {
+      const data = await apiFetch<{ kundenAnonymisiert: number }>("/admin/loeschen.php", {
+        body: { kundeId: ausgewaehlt.id }
+      });
+      setMeldung(
+        `Löschung ausgeführt (${data.kundenAnonymisiert} Kunde(n) anonymisiert). Hinweis: Ein aktiver Rechtsstreit-Hold verhindert die Löschung einzelner Vermietungen.`
+      );
+      setExportDaten(null);
+    } catch (err) {
+      setMeldung(err instanceof Error ? err.message : "Löschung fehlgeschlagen.");
     }
-    setMeldung(
-      `Löschung ausgeführt (${data.kundenAnonymisiert} Kunde(n) anonymisiert). Hinweis: Ein aktiver Rechtsstreit-Hold verhindert die Löschung einzelner Vermietungen.`
-    );
-    setExportDaten(null);
   }
 
   return (

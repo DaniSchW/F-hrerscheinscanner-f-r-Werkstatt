@@ -1,0 +1,17 @@
+# Auf jedem korrekt konfigurierten PHP-Host wird config.php immer ausgeführt
+# (nie als Rohtext ausgeliefert) - trotzdem hier explizit gesperrt, da diese
+# Datei das einzige echte Geheimnis dieses Deployments enthält (MySQL-
+# Passwort, Claude-API-Key, Verschlüsselungsschlüssel). server/api/*.php und
+# server/lib/*.php sind absichtlich NICHT gesperrt: api/*.php sind die
+# eigentlichen Endpunkte und müssen erreichbar bleiben; lib/*.php definiert
+# nur Funktionen (kein Code auf oberster Ebene), ein Direktaufruf ist also
+# folgenlos.
+<FilesMatch "^config(\.example)?\.php$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>

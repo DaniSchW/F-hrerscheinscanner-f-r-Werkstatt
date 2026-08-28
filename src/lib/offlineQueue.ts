@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api";
+
 /**
  * Offline-Warteschlange für die Führerschein-Datenextraktion (Abschnitt 6
  * des Briefings). Wird genutzt, wenn am Tresen kurzzeitig keine
@@ -70,18 +72,14 @@ export async function warteschlangeVerarbeiten(): Promise<number> {
   let erfolgreich = 0;
   for (const eintrag of eintraege) {
     try {
-      const res = await fetch("/api/ocr/fuehrerschein", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await apiFetch("/ocr/fuehrerschein.php", {
+        body: {
           vorderseiteDataUrl: eintrag.vorderseiteDataUrl,
           rueckseiteDataUrl: eintrag.rueckseiteDataUrl ?? undefined
-        })
+        }
       });
-      if (res.ok) {
-        await ausWarteschlangeEntfernen(eintrag.id);
-        erfolgreich += 1;
-      }
+      await ausWarteschlangeEntfernen(eintrag.id);
+      erfolgreich += 1;
     } catch {
       // weiterhin offline oder Fehler - Eintrag bleibt in der Warteschlange
       break;

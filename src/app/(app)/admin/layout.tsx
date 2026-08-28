@@ -1,11 +1,22 @@
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import { getCurrentAuth } from "@/lib/auth/session";
+"use client";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const auth = await getCurrentAuth();
-  if (!auth || auth.mitarbeiter.rolle !== "admin") {
-    redirect("/");
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "@/lib/AuthContext";
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { mitarbeiter } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (mitarbeiter && mitarbeiter.rolle !== "admin") {
+      router.replace("/");
+    }
+  }, [mitarbeiter, router]);
+
+  if (!mitarbeiter || mitarbeiter.rolle !== "admin") {
+    return null;
   }
 
   const links = [

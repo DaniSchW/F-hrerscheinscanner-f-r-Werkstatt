@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { apiFetch } from "@/lib/api";
 
 type KundeTreffer = {
   id: string;
   vorname: string;
   nachname: string;
   geburtsdatum: string;
-  fuehrerscheinNummer: string;
+  fuehrerschein_nummer: string;
 };
 
 export default function KundensuchePage() {
@@ -24,8 +25,7 @@ export default function KundensuchePage() {
     }
     setLadend(true);
     try {
-      const res = await fetch(`/api/kunden?q=${encodeURIComponent(wert)}`);
-      const data = await res.json();
+      const data = await apiFetch<{ kunden: KundeTreffer[] }>(`/kunden/suche.php?q=${encodeURIComponent(wert)}`);
       setTreffer(data.kunden ?? []);
     } finally {
       setLadend(false);
@@ -45,12 +45,12 @@ export default function KundensuchePage() {
       <ul className="space-y-2">
         {treffer.map((k) => (
           <li key={k.id}>
-            <Link href={`/kunden/${k.id}`} className="card block hover:border-brand-500">
+            <Link href={`/kunden/detail?id=${k.id}`} className="card block hover:border-brand-500">
               <p className="font-semibold">
                 {k.vorname} {k.nachname}
               </p>
               <p className="text-base text-slate-500">
-                geb. {new Date(k.geburtsdatum).toLocaleDateString("de-DE")} · FS-Nr. {k.fuehrerscheinNummer}
+                geb. {new Date(k.geburtsdatum).toLocaleDateString("de-DE")} · FS-Nr. {k.fuehrerschein_nummer}
               </p>
             </Link>
           </li>

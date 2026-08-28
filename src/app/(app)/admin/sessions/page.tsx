@@ -1,23 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { parseMysqlDatetime } from "@/lib/datum";
 
 type SessionEintrag = {
   id: string;
-  geraetLabel: string | null;
-  ipAdresse: string | null;
-  erstelltAm: string;
-  zuletztAktivAm: string;
-  ablaufAm: string;
-  mitarbeiter: { id: string; name: string; email: string };
+  geraet_label: string | null;
+  ip_adresse: string | null;
+  erstellt_am: string;
+  zuletzt_aktiv_am: string;
+  ablauf_am: string;
+  mitarbeiter_id: string;
+  mitarbeiter_name: string;
+  mitarbeiter_email: string;
 };
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionEintrag[]>([]);
 
   async function laden() {
-    const res = await fetch("/api/admin/sessions");
-    const data = await res.json();
+    const data = await apiFetch<{ sessions: SessionEintrag[] }>("/admin/sessions-liste.php");
     setSessions(data.sessions ?? []);
   }
 
@@ -28,7 +31,7 @@ export default function SessionsPage() {
   }, []);
 
   async function abmelden(id: string) {
-    await fetch(`/api/admin/sessions/${id}`, { method: "DELETE" });
+    await apiFetch("/admin/sessions-abmelden.php", { body: { id } });
     laden();
   }
 
@@ -39,10 +42,10 @@ export default function SessionsPage() {
         {sessions.map((s) => (
           <li key={s.id} className="card flex items-center justify-between gap-3">
             <div>
-              <p className="font-semibold">{s.mitarbeiter.name}</p>
-              <p className="text-base text-slate-500">{s.geraetLabel ?? "Unbekanntes Gerät"}</p>
+              <p className="font-semibold">{s.mitarbeiter_name}</p>
+              <p className="text-base text-slate-500">{s.geraet_label ?? "Unbekanntes Gerät"}</p>
               <p className="text-sm text-slate-400">
-                Zuletzt aktiv: {new Date(s.zuletztAktivAm).toLocaleString("de-DE")}
+                Zuletzt aktiv: {parseMysqlDatetime(s.zuletzt_aktiv_am).toLocaleString("de-DE")}
               </p>
             </div>
             <button className="btn-danger max-w-fit px-4" onClick={() => abmelden(s.id)}>
