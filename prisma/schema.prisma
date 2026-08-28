@@ -1,0 +1,165 @@
+// Datenmodell für die Führerschein-/Fahrzeugverleih-PWA.
+// Siehe README.md Abschnitt "Datenmodell" für Hintergrund zu den Löschfristen.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rolle {
+  mitarbeiter
+  admin
+}
+
+enum FahrzeugStatus {
+  verfuegbar
+  verliehen
+  wartung
+}
+
+model Mitarbeiter {
+  id             String    @id @default(cuid())
+  name           String
+  email          String    @unique
+  passwortHash   String    @map("passwort_hash")
+  rolle          Rolle     @default(mitarbeiter)
+  aktiv          Boolean   @default(true)
+  erstelltAm     DateTime  @default(now()) @map("erstellt_am")
+  deaktiviertAm  DateTime? @map("deaktiviert_am")
+
+  sessions              Session[]
+  auditEintraege        AuditLog[]
+  vermietungenAusgabe   Vermietung[] @relation("MitarbeiterAusgabe")
+  vermietungenRueckgabe Vermietung[] @relation("MitarbeiterRueckgabe")
+  vermietungenPruefung  Vermietung[] @relation("MitarbeiterFuehrerscheinPruefung")
+
+  @@map("mitarbeiter")
+}
+
+/// DB-gestützte Sessions statt reiner JWTs, damit Admins einzelne
+/// Geräte pro Mitarbeiter auflisten und gezielt abmelden können.
+model Session {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique @map("token_hash")
+  mitarbeiterId String    @map("mitarbeiter_id")
+  mitarbeiter   Mitarbeiter @relation(fields: [mitarbeiterId], references: [id], onDelete: Cascade)
+  geraetLabel   String?   @map("geraet_label")
+  ipAdresse     String?   @map("ip_adresse")
+  erstelltAm    DateTime  @default(now()) @map("erstellt_am")
+  zuletztAktivAm DateTime @default(now()) @map("zuletzt_aktiv_am")
+  ablaufAm      DateTime  @map("ablauf_am")
+  widerrufenAm  DateTime? @map("widerrufen_am")
+
+  @@index([mitarbeiterId])
+  @@map("session")
+}
+
+model Kunde {
+  id                     String   @id @default(cuid())
+  vorname                String
+  nachname               String
+  geburtsdatum           DateTime
+  geburtsort             String
+  adresse                String
+
+  fuehrerscheinNummer      String   @map("fuehrerschein_nummer")
+  ausstellendeBehoerde      String   @map("ausstellende_behoerde")
+  ausstellungsdatum         DateTime @map("ausstellungsdatum")
+  /// Array von { klasse, ausstellungsdatum, ablaufdatum }
+  fuehrerscheinKlassen      Json     @map("fuehrerschein_klassen")
+
+  erstelltAm             DateTime @default(now()) @map("erstellt_am")
+  zuletztAktualisiertAm  DateTime @updatedAt @map("zuletzt_aktualisiert_am")
+
+  /// Gesetzt, sobald die personenbezogenen Daten im Rahmen des
+  /// Löschkonzepts anonymisiert wurden (DSGVO). Danach sind vorname/
+  /// nachname/adresse/fuehrerschein* nur noch Platzhalterwerte.
+  anonymisiertAm         DateTime? @map("anonymisiert_am")
+
+  vermietungen Vermietung[]
+
+  @@index([nachname, vorname])
+  @@index([fuehrerscheinNummer])
+  @@map("kunde")
+}
+
+model Fahrzeug {
+  id                          String         @id @default(cuid())
+  kennzeichen                 String         @unique
+  bezeichnung                 String
+  benoetigteFuehrerscheinklasse String       @map("benoetigte_fuehrerscheinklasse")
+  status                       FahrzeugStatus @default(verfuegbar)
+
+  vermietungen Vermietung[]
+
+  @@map("fahrzeug")
+}
+
+model Vermietung {
+  id         String  @id @default(cuid())
+  kundeId    String  @map("kunde_id")
+  kunde      Kunde   @relation(fields: [kundeId], references: [id])
+  fahrzeugId String  @map("fahrzeug_id")
+  fahrzeug   Fahrzeug @relation(fields: [fahrzeugId], references: [id])
+
+  mitarbeiterIdAusgabe   String @map("mitarbeiter_id_ausgabe")
+  mitarbeiterAusgabe     Mitarbeiter @relation("MitarbeiterAusgabe", fields: [mitarbeiterIdAusgabe], references: [id])
+  mitarbeiterIdRueckgabe String? @map("mitarbeiter_id_rueckgabe")
+  mitarbeiterRueckgabe   Mitarbeiter? @relation("MitarbeiterRueckgabe", fields: [mitarbeiterIdRueckgabe], references: [id])
+
+  ausgabeDatum     DateTime  @default(now()) @map("ausgabe_datum")
+  ruecknahmeDatum  DateTime? @map("ruecknahme_datum")
+
+  kmStandAusgabe   Int
+  kmStandRueckgabe Int?
+  tankfuellungAusgabe   String? @map("tankfuellung_ausgabe")
+  tankfuellungRueckgabe String? @map("tankfuellung_rueckgabe")
+
+  /// Pfade/URLs zu den dauerhaft gespeicherten Zustandsfotos (Objektspeicher).
+  zustandsfotosAusgabe  Json @default("[]") @map("zustandsfotos_ausgabe")
+  zustandsfotosRueckgabe Json @default("[]") @map("zustandsfotos_rueckgabe")
+
+  /// Verschlüsselt gespeicherte Signatur-Daten (Base64, AES-GCM at rest).
+  unterschriftKunde String? @map("unterschrift_kunde")
+
+  fuehrerscheinGeprueftVon String? @map("fuehrerschein_geprueft_von")
+  mitarbeiterFuehrerscheinPruefung Mitarbeiter? @relation("MitarbeiterFuehrerscheinPruefung", fields: [fuehrerscheinGeprueftVon], references: [id])
+  fuehrerscheinKlassePassend Boolean? @map("fuehrerschein_klasse_passend")
+
+  /// Berechnetes Löschdatum für die zugehörigen Führerschein-/Kundendaten,
+  /// gesetzt bei Rückgabe (ruecknahme_datum + RETENTION_MONTHS).
+  loeschenAm DateTime? @map("loeschen_am")
+
+  /// Manuelle Fristverlängerung durch Admin bei laufendem Schadensfall/Rechtsstreit.
+  rechtsstreitHold      Boolean   @default(false) @map("rechtsstreit_hold")
+  rechtsstreitHoldGrund String?   @map("rechtsstreit_hold_grund")
+  rechtsstreitHoldBis   DateTime? @map("rechtsstreit_hold_bis")
+
+  /// Gesetzt, sobald die Unterschrift im Rahmen des Löschkonzepts entfernt wurde.
+  anonymisiertAm DateTime? @map("anonymisiert_am")
+
+  erstelltAm DateTime @default(now()) @map("erstellt_am")
+
+  @@index([kundeId])
+  @@index([fahrzeugId])
+  @@index([loeschenAm])
+  @@map("vermietung")
+}
+
+model AuditLog {
+  id                 String   @id @default(cuid())
+  mitarbeiterId      String?  @map("mitarbeiter_id")
+  mitarbeiter        Mitarbeiter? @relation(fields: [mitarbeiterId], references: [id])
+  aktion             String
+  betroffeneEntitaetId String? @map("betroffene_entitaet_id")
+  detail             Json?
+  zeitstempel        DateTime @default(now())
+
+  @@index([mitarbeiterId])
+  @@index([zeitstempel])
+  @@map("audit_log")
+}
