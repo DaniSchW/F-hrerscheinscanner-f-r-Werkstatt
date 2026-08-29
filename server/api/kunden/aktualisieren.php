@@ -15,7 +15,8 @@ if ($id === '') {
 
 $erlaubteFelder = [
   'vorname' => 'vorname', 'nachname' => 'nachname', 'geburtsdatum' => 'geburtsdatum',
-  'geburtsort' => 'geburtsort', 'adresse' => 'adresse', 'fuehrerscheinNummer' => 'fuehrerschein_nummer',
+  'geburtsort' => 'geburtsort', 'adresse' => 'adresse', 'plz' => 'plz', 'ort' => 'ort',
+  'fuehrerscheinNummer' => 'fuehrerschein_nummer',
   'ausstellendeBehoerde' => 'ausstellende_behoerde', 'ausstellungsdatum' => 'ausstellungsdatum',
 ];
 

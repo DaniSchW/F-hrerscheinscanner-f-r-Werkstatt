@@ -55,12 +55,13 @@ function fs_kunde_anonymisieren_falls_faellig(string $kundeId): bool {
   }
 
   $db->prepare(
-    'UPDATE kunde SET vorname = ?, nachname = ?, geburtsdatum = ?, geburtsort = ?, adresse = ?,
+    'UPDATE kunde SET vorname = ?, nachname = ?, geburtsdatum = ?, geburtsort = ?, adresse = ?, plz = ?, ort = ?,
        fuehrerschein_nummer = ?, ausstellende_behoerde = ?, ausstellungsdatum = ?,
        fuehrerschein_klassen = ?, anonymisiert_am = UTC_TIMESTAMP()
      WHERE id = ?'
   )->execute([
     FS_REDAKTIONS_MARKER, FS_REDAKTIONS_MARKER, FS_REDAKTIONS_DATUM, FS_REDAKTIONS_MARKER, FS_REDAKTIONS_MARKER,
+    FS_REDAKTIONS_MARKER, FS_REDAKTIONS_MARKER,
     FS_REDAKTIONS_MARKER, FS_REDAKTIONS_MARKER, FS_REDAKTIONS_DATUM,
     json_encode([]), $kundeId,
   ]);

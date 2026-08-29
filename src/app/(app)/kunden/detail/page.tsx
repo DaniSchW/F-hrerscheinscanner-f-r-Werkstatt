@@ -11,6 +11,9 @@ type KundeDetail = {
   nachname: string;
   geburtsdatum: string;
   geburtsort: string;
+  adresse: string | null;
+  plz: string | null;
+  ort: string | null;
   fuehrerschein_nummer: string;
   ausstellende_behoerde: string;
   fuehrerschein_klassen: { klasse: string; ablaufdatum: string | null }[];
@@ -40,6 +43,9 @@ function KundeDetailInhalt() {
   if (!kunde) return <p className="text-slate-500">Wird geladen…</p>;
 
   const klassen = kunde.fuehrerschein_klassen ?? [];
+  const adresseVollstaendig = [kunde.adresse, [kunde.plz, kunde.ort].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div className="space-y-6">
@@ -50,6 +56,7 @@ function KundeDetailInhalt() {
         <p className="text-slate-500">
           geb. {new Date(kunde.geburtsdatum).toLocaleDateString("de-DE")} in {kunde.geburtsort}
         </p>
+        {adresseVollstaendig && <p className="text-slate-500">{adresseVollstaendig}</p>}
       </div>
 
       <div className="card space-y-1">

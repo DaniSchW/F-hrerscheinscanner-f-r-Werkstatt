@@ -19,7 +19,9 @@ type KundeApiAntwort = {
   nachname: string;
   geburtsdatum: string;
   geburtsort: string;
-  adresse: string;
+  adresse: string | null;
+  plz: string | null;
+  ort: string | null;
   fuehrerschein_nummer: string;
   ausstellende_behoerde: string;
   ausstellungsdatum: string;
@@ -84,7 +86,9 @@ export default function NeueVermietungPage() {
         nachname: k.nachname,
         geburtsdatum: k.geburtsdatum.slice(0, 10),
         geburtsort: k.geburtsort,
-        adresse: k.adresse,
+        adresse: k.adresse ?? "",
+        plz: k.plz ?? "",
+        ort: k.ort ?? "",
         fuehrerscheinNummer: k.fuehrerschein_nummer,
         ausstellendeBehoerde: k.ausstellende_behoerde,
         ausstellungsdatum: k.ausstellungsdatum.slice(0, 10),
@@ -133,6 +137,8 @@ export default function NeueVermietungPage() {
           geburtsdatum: string | null;
           geburtsort: string | null;
           adresse: string | null;
+          plz: string | null;
+          ort: string | null;
           fuehrerscheinNummer: string | null;
           ausstellendeBehoerde: string | null;
           ausstellungsdatum: string | null;
@@ -148,6 +154,8 @@ export default function NeueVermietungPage() {
         geburtsdatum: d.geburtsdatum ?? prev.geburtsdatum,
         geburtsort: d.geburtsort ?? prev.geburtsort,
         adresse: d.adresse ?? prev.adresse,
+        plz: d.plz ?? prev.plz,
+        ort: d.ort ?? prev.ort,
         fuehrerscheinNummer: d.fuehrerscheinNummer ?? prev.fuehrerscheinNummer,
         ausstellendeBehoerde: d.ausstellendeBehoerde ?? prev.ausstellendeBehoerde,
         ausstellungsdatum: d.ausstellungsdatum ?? prev.ausstellungsdatum,
@@ -181,7 +189,6 @@ export default function NeueVermietungPage() {
       "nachname",
       "geburtsdatum",
       "geburtsort",
-      "adresse",
       "fuehrerscheinNummer",
       "ausstellendeBehoerde",
       "ausstellungsdatum"
@@ -336,11 +343,28 @@ export default function NeueVermietungPage() {
             />
           </div>
           <div>
-            <label className="field-label">Adresse</label>
+            <label className="field-label">Adresse (optional)</label>
             <input
               className="field-input"
               value={formular.adresse}
               onChange={(e) => setFormular({ ...formular, adresse: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="field-label">PLZ (optional)</label>
+            <input
+              className="field-input"
+              inputMode="numeric"
+              value={formular.plz}
+              onChange={(e) => setFormular({ ...formular, plz: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="field-label">Ort (optional)</label>
+            <input
+              className="field-input"
+              value={formular.ort}
+              onChange={(e) => setFormular({ ...formular, ort: e.target.value })}
             />
           </div>
           <div>

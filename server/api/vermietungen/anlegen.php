@@ -25,7 +25,7 @@ if (!is_array($kunde) || !isset($kunde['modus']) || $fahrzeugId === '' ||
 
 if ($kunde['modus'] === 'neu') {
   $pflichtfelder = [
-    'vorname', 'nachname', 'geburtsdatum', 'geburtsort', 'adresse',
+    'vorname', 'nachname', 'geburtsdatum', 'geburtsort',
     'fuehrerscheinNummer', 'ausstellendeBehoerde', 'ausstellungsdatum',
   ];
   foreach ($pflichtfelder as $feld) {
@@ -77,13 +77,13 @@ try {
   } elseif ($kunde['modus'] === 'neu') {
     $kundeId = fs_uuid4();
     $db->prepare(
-      'INSERT INTO kunde (id, vorname, nachname, geburtsdatum, geburtsort, adresse,
+      'INSERT INTO kunde (id, vorname, nachname, geburtsdatum, geburtsort, adresse, plz, ort,
          fuehrerschein_nummer, ausstellende_behoerde, ausstellungsdatum, fuehrerschein_klassen)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )->execute([
       $kundeId,
       $kunde['vorname'] ?? '', $kunde['nachname'] ?? '', $kunde['geburtsdatum'] ?? null,
-      $kunde['geburtsort'] ?? '', $kunde['adresse'] ?? '',
+      $kunde['geburtsort'] ?? '', $kunde['adresse'] ?? null, $kunde['plz'] ?? null, $kunde['ort'] ?? null,
       $kunde['fuehrerscheinNummer'] ?? '', $kunde['ausstellendeBehoerde'] ?? '', $kunde['ausstellungsdatum'] ?? null,
       json_encode($kunde['fuehrerscheinKlassen'] ?? []),
     ]);

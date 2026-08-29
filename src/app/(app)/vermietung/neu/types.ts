@@ -10,6 +10,8 @@ export type KundeFormular = {
   geburtsdatum: string;
   geburtsort: string;
   adresse: string;
+  plz: string;
+  ort: string;
   fuehrerscheinNummer: string;
   ausstellendeBehoerde: string;
   ausstellungsdatum: string;
@@ -22,6 +24,8 @@ export const leeresKundeFormular: KundeFormular = {
   geburtsdatum: "",
   geburtsort: "",
   adresse: "",
+  plz: "",
+  ort: "",
   fuehrerscheinNummer: "",
   ausstellendeBehoerde: "",
   ausstellungsdatum: "",
