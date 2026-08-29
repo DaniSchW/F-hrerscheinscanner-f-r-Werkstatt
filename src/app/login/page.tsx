@@ -9,6 +9,7 @@ function LoginFormular() {
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [passwort, setPasswort] = useState("");
+  const [angemeldetBleiben, setAngemeldetBleiben] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [ladend, setLadend] = useState(false);
 
@@ -18,7 +19,7 @@ function LoginFormular() {
     setLadend(true);
     try {
       const data = await apiFetch<{ token: string }>("/auth/login.php", { body: { email, passwort } });
-      setToken(data.token);
+      setToken(data.token, angemeldetBleiben);
       const ziel = params.get("weiter") ?? "/";
       router.replace(ziel);
     } catch (err) {
@@ -68,6 +69,23 @@ function LoginFormular() {
             value={passwort}
             onChange={(e) => setPasswort(e.target.value)}
           />
+        </div>
+        <div>
+          <label className="flex items-start gap-2 text-base text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={angemeldetBleiben}
+              onChange={(e) => setAngemeldetBleiben(e.target.checked)}
+            />
+            <span>
+              Angemeldet bleiben
+              <span className="block text-sm text-slate-500">
+                Sie bleiben auf diesem Gerät 7 Tage angemeldet, ohne sich erneut einloggen zu müssen. Ohne
+                Haken werden Sie beim Schließen des Browsers abgemeldet.
+              </span>
+            </span>
+          </label>
         </div>
         {fehler && <p className="text-danger-500 font-medium">{fehler}</p>}
         <button type="submit" className="btn-primary" disabled={ladend}>

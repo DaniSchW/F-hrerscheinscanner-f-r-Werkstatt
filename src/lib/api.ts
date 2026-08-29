@@ -17,15 +17,29 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/server/api";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  // localStorage ("angemeldet bleiben", 7 Tage) hat Vorrang vor sessionStorage
+  // (nur für die aktuelle Browser-Sitzung, siehe setToken()).
+  return window.localStorage.getItem(TOKEN_KEY) ?? window.sessionStorage.getItem(TOKEN_KEY);
 }
 
-export function setToken(token: string): void {
-  window.localStorage.setItem(TOKEN_KEY, token);
+/**
+ * @param angemeldetBleiben true: Token in localStorage - bleibt bis zu 7 Tage
+ *   über Browser-Neustarts hinweg gültig (Checkbox beim Login). false: Token
+ *   nur in sessionStorage - endet, sobald der Browser/Tab geschlossen wird.
+ */
+export function setToken(token: string, angemeldetBleiben: boolean): void {
+  if (angemeldetBleiben) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+    window.sessionStorage.removeItem(TOKEN_KEY);
+  } else {
+    window.sessionStorage.setItem(TOKEN_KEY, token);
+    window.localStorage.removeItem(TOKEN_KEY);
+  }
 }
 
 export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
+  window.sessionStorage.removeItem(TOKEN_KEY);
 }
 
 export class ApiError extends Error {
