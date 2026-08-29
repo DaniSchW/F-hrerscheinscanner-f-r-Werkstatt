@@ -105,14 +105,20 @@ antwortet aber ohne CORS-Header; für funktionierende Cross-Origin-Requests im `
 `Access-Control-Allow-Origin` in `server/lib/response.php` ergänzen, oder direkt production-artig über
 denselben Ursprung testen, siehe nächster Abschnitt).
 
+`npm run build` ruft automatisch (npm-"postbuild"-Hook, `scripts/copy-server-to-out.mjs`) auch
+`server/` nach `out/server/` kopiert - `out/` entspricht danach 1:1 dem fertigen Domain-
+Wurzelverzeichnis (ohne `server/config.php` und ohne Upload-Laufzeitdaten, siehe nächster Abschnitt).
+Für den Upload muss also **nichts mehr verschoben werden**: einfach der komplette Inhalt von `out/`
+hochladen.
+
 ### Production-artig lokal testen (empfohlen vor jedem Deploy)
 
 Simuliert das echte Kasserver-Setup: Next-Export und `server/` auf demselben Ursprung, kein CORS nötig.
 
 ```bash
-npm run build                   # erzeugt out/
-mkdir -p /tmp/deploy-test && cp -r out/. /tmp/deploy-test/ && cp -r server /tmp/deploy-test/server
-cd /tmp/deploy-test && php -S localhost:8090
+npm run build                   # erzeugt out/ inkl. out/server/
+cp server/config.php out/server/config.php   # lokale Testkonfiguration ergänzen
+cd out && php -S localhost:8090
 # http://localhost:8090/ öffnen
 ```
 
@@ -120,16 +126,18 @@ Weitere Skripte: `npm run typecheck`, `npm run lint`.
 
 ## Deployment auf dem Kasserver
 
-1. `npm run build` lokal ausführen → Inhalt von `out/` per FTP/SFTP in das Hauptverzeichnis (Domain-
-   Wurzel) hochladen.
-2. `server/` (ohne `server/config.php`, ohne `server/uploads/*` außer `.htaccess`) daneben in
-   dasselbe Verzeichnis hochladen, sodass es unter `https://IHR-DOMAIN/server/` erreichbar ist.
+1. `npm run build` lokal ausführen → `out/` enthält danach die komplette Seite inkl. `server/`.
+2. Kompletten Inhalt von `out/` per FTP/SFTP in das Hauptverzeichnis (Domain-Wurzel) hochladen -
+   **ein einziger Upload-Vorgang, keine Ordner verschieben.**
 3. `server/config.example.php` auf dem Server nach `server/config.php` kopieren und ausfüllen
-   (DB-Zugang aus KAS, Claude-API-Key, `CRON_SECRET`, `SIGNATURE_ENCRYPTION_KEY`).
+   (DB-Zugang aus KAS, Claude-API-Key, `CRON_SECRET`, `SIGNATURE_ENCRYPTION_KEY`) - diese Datei ist
+   bewusst nicht im Build enthalten (Geheimnisse) und muss einmalig direkt auf dem Server angelegt
+   oder gezielt per FTP nach `server/config.php` hochgeladen werden.
 4. `server/schema.sql` einmalig gegen die MySQL-Datenbank ausführen (phpMyAdmin in KAS oder
    `mysql -u <dbname> -p <dbname> < server/schema.sql`).
 5. Ersten Admin-Account anlegen: `php server/seed.php admin@example.com "IhrPasswort"` per SSH,
-   oder manuell einen `mitarbeiter`-Datensatz mit `password_hash()` anlegen.
+   oder per phpMyAdmin manuell einen `mitarbeiter`-Datensatz einfügen (Passwort-Hash lässt sich
+   lokal mit `php -r 'echo password_hash("...", PASSWORD_DEFAULT);'` erzeugen).
 6. In KAS unter "Cronjobs" einen täglichen Job einrichten, der den Löschjob aufruft:
    ```bash
    curl -X POST https://IHR-DOMAIN/server/api/cron/loeschung.php \
@@ -138,8 +146,9 @@ Weitere Skripte: `npm run typecheck`, `npm run lint`.
 7. `server/uploads/` muss für den Webserver-Nutzer beschreibbar sein (Standard bei Kasserver-Hosting
    i.d.R. gegeben).
 
-Bei jedem Code-Update: Schritt 1–2 wiederholen (nur `out/` und `server/` neu hochladen,
-`server/config.php` und `server/uploads/` bleiben unangetastet).
+Bei jedem Code-Update: Schritt 1–2 wiederholen (nur den Inhalt von `out/` neu hochladen -
+`server/config.php` und `server/uploads/` auf dem Server bleiben dabei unangetastet, da sie nicht
+Teil des Builds sind).
 
 ## API-Routen (server/api/)
 
