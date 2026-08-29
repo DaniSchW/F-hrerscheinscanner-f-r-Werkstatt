@@ -58,10 +58,9 @@ export function KameraAufnahme({
         audio: false
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      // Das <video>-Element existiert erst, nachdem status="aktiv" gerendert
+      // wurde - das Verbinden des Streams passiert daher im Effekt unten,
+      // nicht hier direkt (videoRef.current wäre an dieser Stelle noch null).
       setStatus("aktiv");
     } catch (err) {
       setFehler(fehlermeldungFuer(err));
@@ -74,6 +73,14 @@ export function KameraAufnahme({
     streamRef.current = null;
     setStatus("inaktiv");
   }, []);
+
+  // Verbindet den Stream mit dem Video-Element, sobald es (bei status="aktiv") im DOM ist.
+  useEffect(() => {
+    if (status === "aktiv" && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => undefined);
+    }
+  }, [status]);
 
   useEffect(() => () => kameraStoppen(), [kameraStoppen]);
 
